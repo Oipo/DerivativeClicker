@@ -3,6 +3,28 @@ Rollover hilarious jokes/stats
 Reset currency buyables: change click improver to reset curr buyable, ticks between builds decrease, upgrades influenced by certain buildings
 */
 
+/// <reference path="ga.d.ts" />
+/// <reference path="jquery.d.ts" />
+/// <reference path="jqueryui.d.ts" />
+/// <reference path="underscore.d.ts" />
+
+/// <reference path="building.ts" />
+/// <reference path="charts.ts" />
+
+function copyObject<T> (object:T): T {
+    var objectCopy = <T>{};
+
+    for (var key in object)
+    {
+        if (object.hasOwnProperty(key))
+        {
+            objectCopy[key] = object[key];
+        }
+    }
+
+    return objectCopy;
+}
+
 var startPlayer = {
 	//currencies
 	money: 0.1,
@@ -91,7 +113,7 @@ var startPlayer = {
 	versionNum: versionNum
 };
 
-var player = deepObjCopy(startPlayer);
+var player = copyObject(startPlayer);
 
 var versionNum = 0.321;
 
@@ -134,44 +156,45 @@ function addProofs(proofs){
 	addMoney(-Math.round(proofs) * player.costPerProof);
 }
 
-//function to display values
-function displayNum(num, ifMoney){
-	displayNum.suffixes = ["K", "M", "B", "T", "Qa", "Qt", "Sx", "Sp", "Oc", "Nn", "Dc", "UDc", "DDc", "TDc", "QaDc", "QtDc", "SxDc", "SpDc", "ODc", "NDc", "Vi", 
+var displayNumsuffixes: Array<string> = ["K", "M", "B", "T", "Qa", "Qt", "Sx", "Sp", "Oc", "Nn", "Dc", "UDc", "DDc", "TDc", "QaDc", "QtDc", "SxDc", "SpDc", "ODc", "NDc", "Vi", 
 						   "UVi", "DVi", "TVi", "QaVi", "QtVi", "SxVi", "SpVi", "OcVi", "NnVi", "Tg", "UTg", "DTg", "TTg", "QaTg", "QtTg", "SxTg", "SpTg", "OcTg", "NnTg", "Qd",
 						   "UQd", "DQd", "TQd", "QaQd", "QtQd", "SxQd", "SpQd", "OcQd", "NnQd", "Qq", "UQq", "DQq", "TQq", "QaQq", "QtQq", "SxQq", "SpQq", "OcQq", "NnQq", "Sg"]
+
+//function to display values
+function displayNum(num: number, ifMoney: boolean):string{
+	if(player.sciNotation) return Math.abs(num) < 100000 ? (ifMoney ? parseFloat(num.toString()).toFixed(2) : num.toString()) : parseFloat(num.toString()).toPrecision(5);
 	
-	if(player.sciNotation) return Math.abs(num) < 100000 ? (ifMoney ? parseFloat(num).toFixed(2) : num) : parseFloat(num).toPrecision(5);
-	
-	for(var i = displayNum.suffixes.length - 1; i >= 0; i--){
+	for(var i = displayNumsuffixes.length - 1; i >= 0; i--){
 		if(Math.abs(num) >= Math.pow(10, 3*i + 3) * 0.99999){
-			return i < 4 ? parseFloat(num/Math.pow(10, 3*i + 3)).toFixed(2) + displayNum.suffixes[i] : parseFloat(num/Math.pow(10, 3*i + 3)).toFixed(2) + " " + displayNum.suffixes[i]; //spaces out first four suffixes
+			return (i < 4) ? parseFloat((num/Math.pow(10, 3*i + 3)).toString()).toFixed(2) + displayNumsuffixes[i] : parseFloat((num/Math.pow(10, 3*i + 3)).toString()).toFixed(2) + " " + displayNumsuffixes[i]; //spaces out first four suffixes
 		}
 	}
 	
-	return ifMoney ? parseFloat(num).toFixed(2) : num;
+	return ifMoney ? parseFloat(num.toString()).toFixed(2) : num.toString();
 }
+
+var calcMultfactors: Array<number> = [0.0005, 0.002, 0.005, 0.01, 0.02, 0.04, 0.06];
 
 //function that recalculates the multipliers associated with upgrades
 function calcMult(mult){
 	var index = mult - 1;
-	calcMult.factors = [0.0005, 0.002, 0.005, 0.01, 0.02, 0.04, 0.06];
 	var totalBuildings = 0;
 	
 	for(var i = mult*5 - 5; i < mult*5; i++){
 		totalBuildings += player.buildings[i].manual;
 	}
 	
-	player.mult[index] = Math.round(10000 + (player.tierUpgrades[index] * calcMult.factors[index] * totalBuildings * 10000)) / 10000;
+	player.mult[index] = Math.round(10000 + (player.tierUpgrades[index] * calcMultfactors[index] * totalBuildings * 10000)) / 10000;
 }
 
 function calcGlobalMult(){
 	for(var i = 0; i < globalMult.length; i++){
-		globalMult[i] = parseFloat((player.resetCurr[i] * 0.01) + 1).toFixed(2);
+		globalMult[i] = +parseFloat(((player.resetCurr[i] * 0.01) + 1).toString()).toFixed(2);
 	}
 }
 
 //function that calculates price of buying multiple buildings at once
-function calcTotalPrice(price, factor, number){
+function calcTotalPrice(price, factor, number): number {
 	return price*((Math.pow(factor, number) - 1)/(factor - 1));
 }
 
@@ -179,7 +202,7 @@ function calcTotalPrice(price, factor, number){
 function getNumToBuy(num){
     var activeTab = $("#tabs").tabs("option", "active");
 	if(num === -1){
-		player.numToBuy = "Max";
+		player.numToBuy = -1;
 	}
 	else{
 		var newNum = parseInt(num);
@@ -187,8 +210,14 @@ function getNumToBuy(num){
 			player.numToBuy = newNum;
 		}
 	}
-    $("#currentNumToBuy").html(player.numToBuy);
-	$("#currentNumToBuy2").html(player.numToBuy);
+    if(player.numToBuy == -1)
+			$("#currentNumToBuy").html("Max");
+		else
+			$("#currentNumToBuy").html(player.numToBuy.toString());
+	if(player.numToBuy == -1)
+			$("#currentNumToBuy2").html("Max");
+		else
+			$("#currentNumToBuy2").html(player.numToBuy.toString());
 	if(activeTab == 0) updateInventory();
 }
 
@@ -197,30 +226,13 @@ function factorial(n){
 	return n*factorial(n-1);
 }
 
-function deepObjCopy (dupeObj) {
-    var retObj = new Object();
-    if (typeof(dupeObj) == 'object') {
-        if (typeof(dupeObj.length) != 'undefined')
-            var retObj = new Array();
-        for (var objInd in dupeObj) {   
-            if (typeof(dupeObj[objInd]) == 'object') {
-                retObj[objInd] = deepObjCopy(dupeObj[objInd]);
-            } else if (typeof(dupeObj[objInd]) == 'string') {
-                retObj[objInd] = dupeObj[objInd];
-            } else if (typeof(dupeObj[objInd]) == 'number') {
-                retObj[objInd] = dupeObj[objInd];
-            } else if (typeof(dupeObj[objInd]) == 'boolean') {
-                ((dupeObj[objInd] == true) ? retObj[objInd] = true : retObj[objInd] = false);
-            }
-        }
-    }
-    return retObj;
-}
-
 //functions that handle saving
 function init(){
-	player = deepObjCopy(startPlayer);
+	player = copyObject(startPlayer);
 };
+
+var enableChart: boolean = true;
+var buttonList: Array<JQueryUI.TransferEffect>;
 
 function save() {
 	localStorage.setItem("playerStored", JSON.stringify(player));
@@ -229,6 +241,7 @@ function save() {
 	var d = new Date();
 	$("#lastSave").html(d.toLocaleTimeString());
 	
+	//Typescript error, no idea how to fix
 	ga('send', 'event', 'save', 'click', 'save'); //analytics
 }
 
@@ -245,7 +258,10 @@ function wipe() {
 		calcGlobalMult();
 		
 		updateAll();
-		$("#currentNumToBuy").html(player.numToBuy);
+		if(player.numToBuy == -1)
+			$("#currentNumToBuy").html("Max");
+		else
+			$("#currentNumToBuy").html(player.numToBuy.toString());
 	}
 }
 
@@ -267,7 +283,10 @@ function importSave(){
 		if(player.upgrades[1] == 24) player.upgradeCosts[1] = Infinity;
 		save();
 		calcGlobalMult();
-		$("#currentNumToBuy").html(player.numToBuy);
+		if(player.numToBuy == -1)
+			$("#currentNumToBuy").html("Max");
+		else
+			$("#currentNumToBuy").html(player.numToBuy.toString());
 		
 		updateAll();
 	}
@@ -304,7 +323,7 @@ function reset(tier) {
 		confirmationText += (displayNum(player.resetCurrTracker, false) + " tier 1 reset currency.\n");
 		if(tier > 1){
 			for(var i = 1; i < tier; i++){
-				confirmationText += (displayNum(Math.floor(player.resetCurr[i- 1] / player.resetCurrFactor, false)) + " tier " + (i + 1) + " reset currency.\n");
+				confirmationText += (displayNum(Math.floor(player.resetCurr[i- 1] / player.resetCurrFactor), false) + " tier " + (i + 1) + " reset currency.\n");
 				confirmationText += ("At the cost of " + displayNum(Math.floor(player.resetCurr[i - 1] / player.resetCurrFactor) * player.resetCurrFactor, false) + " tier " + i + " reset currency.\n");
 			}
 		}
@@ -370,6 +389,7 @@ function reset(tier) {
 			}
 			updateAll();
 			
+			//This generates a typescript error, not sure how to fix that
 			ga('send', 'event', 'reset', 'click', 'reset'); //analytics
 		}
 	}
@@ -389,7 +409,7 @@ var prestigeTemplate = _.template($("#prestigeTemplate").html());
 function updateMoney() {
 	var newMoneyTable = moneyTableTemplate({money: displayNum(player.money, true), moneyPerSecond: displayNum(player.moneyPerSecond, true), netMoneyPerSecond: displayNum(player.netMoneyPerSecond, true), 
 											proofs: displayNum(player.proofs, false), proofsPerSecond: displayNum(player.proofsPerSecond, false), moneyPerClick: displayNum(player.moneyPerClick * player.clickPower, true), 
-											tickLength: parseFloat(player.updateInterval * player.timeMult).toFixed(0), timeMult: displayNum(player.timeMult, true), moneyPerAutoclick: displayNum(player.moneyPerAutoclick, true)});
+											tickLength: parseFloat(<any>(player.updateInterval * player.timeMult)).toFixed(0), timeMult: displayNum(player.timeMult, true), moneyPerAutoclick: displayNum(player.moneyPerAutoclick, true)});
 
 	$("#info").html(newMoneyTable);
 }
@@ -449,7 +469,7 @@ function updateInventory() {
 	//updates whether buttons are lit using a list of buttons	
 	buttonList = jQuery.makeArray($("#tableContainer div table tr .button"));
 	
-	if(player.numToBuy == "Max"){
+	if(player.numToBuy == -1){
 		for(var i = 0; i < buttonList.length; i++){
 			if(player.money < player.buildings[i].moneyCost || player.proofs < player.buildings[i].proofCost){
 				buttonList[i].className = "button";
@@ -559,7 +579,7 @@ function updateUpgrades(){
 	
 	buttonList = jQuery.makeArray($("#upgradesTable tr .button"));
 	
-	if(player.numToBuy == "Max"){
+	if(player.numToBuy == -1){
     	for(var i = 0; i < numTiers; i++){
     		if(player.money < player.tierUpgradeCosts[i]){
     			buttonList[i].className = "button";
@@ -694,27 +714,32 @@ function versionControl(ifImport){
 
 //things that run on startup: moneybutton initialization, tabs, initial DOM updates, load save
 $(document).ready(function(){
-	$("#tabs").tabs({show:{effect: "slideDown"}}, {hide:{effect: "slideUp"}});
+	$("#tabs").tabs({show:{effect: "slideDown"}, hide:{effect: "slideUp"}});
   
 	if(localStorage.getItem("playerStored") != null) load();
-	if(typeof enableChart == 'undefined') enableChart = true;
 	if(!enableChart) $("#chartStuff").toggle();
 	
 	versionControl(false);
 	
 	if(player.upgrades[1] == 24) player.upgradeCosts[1] = Infinity; //deals with JSON's incompatibility with Infinity
 	
-	$("#version").html(player.versionNum);
+	$("#version").html(player.versionNum.toString());
 
-	$("#currentNumToBuy").html(player.numToBuy);
-	$("#currentNumToBuy2").html(player.numToBuy);
-	$("#minTickLength").html(player.minTickLength);
+	if(player.numToBuy == -1)
+			$("#currentNumToBuy").html("Max");
+		else
+			$("#currentNumToBuy").html(player.numToBuy.toString());
+	if(player.numToBuy == -1)
+			$("#currentNumToBuy2").html("Max");
+		else
+			$("#currentNumToBuy2").html(player.numToBuy.toString());
+	$("#minTickLength").html(player.minTickLength.toString());
 	
 	$("#resetCurrTable tr td .buttonLit, #resetCurrTable tr td .button").tooltip({show: false, hide: false, content: function () {
     	return this.getAttribute("title");
 	}});
 
-	for(i = 1; i <= numTiers; i++){
+	for(var i: number = 1; i <= numTiers; i++){
 		calcMult(i);
 	}
 	calcGlobalMult();
@@ -730,8 +755,9 @@ $(document).ready(function(){
 //function to buy buildings: onclick events
 
 function buyBuilding(index){
-	var numToBuy, moneyCost, proofCost;
-	if(player.numToBuy == "Max"){
+console.log("Buying building " + player.numToBuy.toString())
+	var numToBuy: number, moneyCost: number, proofCost: number;
+	if(player.numToBuy == -1){
 		var numToBuy = 0;
 		while(calcTotalPrice(player.buildings[index].moneyCost, player.buildings[index].factor, numToBuy) <= player.money && Math.round(calcTotalPrice(player.buildings[index].proofCost, player.buildings[index].factor, numToBuy)) <= player.proofs){
 			numToBuy++;
@@ -787,8 +813,8 @@ function buyBuilding(index){
 //function to buy upgrades: onclick events
 
 function buyTierUpgrade(index){
-    var numToBuy, cost;
-    if(player.numToBuy == "Max"){
+    var numToBuy: number, cost: number;
+    if(player.numToBuy == -1){
         var numToBuy = 0;
         while(calcTotalPrice(player.tierUpgradeCosts[index], 1000, numToBuy) <= player.money){
             numToBuy++;
@@ -814,8 +840,8 @@ function buyTierUpgrade(index){
 }
 
 function buyUpgrade(index) {
-	var numToBuy, cost;
-	if (player.numToBuy == "Max") {
+	var numToBuy: number, cost: number;
+	if (player.numToBuy == -1) {
 		var numToBuy = 0;
 		while (calcTotalPrice(player.upgradeCosts[index], upgradeCostFactor[index], numToBuy) <= player.money) {
 			numToBuy++;
@@ -842,6 +868,7 @@ function buyUpgrade(index) {
 
 function buyCurrBuyable(index) {
 	//conditions for buyable
+	alert("click!");
 	if (player.currBuyables[index].owned) return; //already owned
 	if (index % 6 != 0){
 		if(!player.currBuyables[index - 1].owned) return; //lower tier one not owned

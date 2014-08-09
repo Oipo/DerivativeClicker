@@ -14,7 +14,7 @@ var Building = (function () {
 })();
 
 var CurrBuyable = (function () {
-    function CurrBuyable(cost, text) {
+    function CurrBuyable(cost) {
         this.owned = false;
         this.cost = cost; //cost is an array of length 6
     }

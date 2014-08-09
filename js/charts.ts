@@ -1,3 +1,5 @@
+/// <reference path="highcharts.d.ts" />
+
 var enableChart = true;
 
 $(function() {
@@ -11,7 +13,7 @@ $(function() {
         }
     });
 
-    var chart;
+    var chart: HighchartsChartObject;
     $('#chartContainer').highcharts({
         chart: {
             type: 'areaspline',
@@ -23,7 +25,7 @@ $(function() {
                     // set up the updating of the chart each ten seconds
                     var series = this.series[0];
                     chart = this;
-                    counter = 0;
+                    var counter = 0;
                     setInterval(function() {
                     	if(enableChart){
 	                        var x = (new Date()).getTime(), // current time

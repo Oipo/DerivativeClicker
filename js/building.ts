@@ -20,7 +20,7 @@ class CurrBuyable {
 	owned: boolean = false;
 	cost: Array<number>;
 	
-	constructor(cost: Array<number>, text: string) {
+	constructor(cost: Array<number>) {
 		this.cost = cost; //cost is an array of length 6
 	}
 	
