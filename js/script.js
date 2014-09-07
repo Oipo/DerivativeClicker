@@ -2,7 +2,6 @@
 Rollover hilarious jokes/stats
 Reset currency buyables: change click improver to reset curr buyable, ticks between builds decrease, upgrades influenced by certain buildings
 */
-/// <reference path="ga.d.ts" />
 /// <reference path="jquery.d.ts" />
 /// <reference path="jqueryui.d.ts" />
 /// <reference path="underscore.d.ts" />
@@ -61,9 +60,8 @@ var startPlayer = {
     mult: [1, 1, 1, 1, 1, 1, 1],
     //other tracking variables
     clickTracker: 0,
-    updateInterval: 1000,
     numToBuy: 1,
-    timeMult: 1,
+    ticksPerSecond: 1,
     //these variables aren't changed by resets
     //statistics
     totalMoneyEarned: 0,
@@ -96,7 +94,6 @@ var startPlayer = {
         new CurrBuyable([1e7, 0, 0, 0, 0, 0]), new CurrBuyable([0, 1e7, 0, 0, 0, 0]), new CurrBuyable([0, 0, 2e7, 0, 0, 0]), new CurrBuyable([0, 0, 0, 1e9, 0, 0]), new CurrBuyable([0, 0, 0, 0, 2e9, 0]), new CurrBuyable([0, 0, 0, 0, 0, 5e9])],
     //settings
     sciNotation: false,
-    minTickLength: 100,
     numResets: [0, 0, 0, 0, 0, 0, 0],
     resetCurr: [0, 0, 0, 0, 0, 0, 0],
     versionNum: versionNum
@@ -232,19 +229,24 @@ var enableChart = true;
 var buttonList;
 
 function save() {
+    return;
     localStorage.setItem("playerStored", JSON.stringify(player));
     localStorage.setItem("enableChart", JSON.stringify(enableChart));
 
     var d = new Date();
     $("#lastSave").html(d.toLocaleTimeString());
-
-    //Typescript error, no idea how to fix
-    ga('send', 'event', 'save', 'click', 'save'); //analytics
+    localStorage.setItem("saveDate", JSON.stringify(d));
 }
 
 function load() {
     $.extend(true, player, JSON.parse(localStorage.getItem("playerStored")));
     enableChart = JSON.parse(localStorage.getItem("enableChart"));
+    var d = JSON.parse(localStorage.getItem("saveDate"));
+    var dNow = new Date();
+    if (d) {
+        var dThen = new Date(d);
+        console.log("seconds since: " + (dNow.getTime() - dThen.getTime()) / 1000);
+    }
 }
 
 function wipe() {
@@ -287,22 +289,6 @@ function importSave() {
 
         updateAll();
     }
-}
-
-function setMinTickLength() {
-    var minTickLength;
-    do {
-        minTickLength = prompt("Enter a new minimum tick length between 10 and 1000 (noninclusive).");
-    } while((minTickLength >= 1000 || minTickLength <= 10) && minTickLength != null);
-
-    if (minTickLength == null)
-        return;
-
-    player.minTickLength = minTickLength;
-    player.timeMult = 1;
-    while (player.updateInterval * player.timeMult < player.minTickLength)
-        player.timeMult *= 1000 / player.minTickLength;
-    $("#minTickLength").html(minTickLength);
 }
 
 function ifMoreDerivs(tier) {
@@ -368,8 +354,7 @@ function reset(tier) {
                 upgradeCosts: [100000, 10000000],
                 mult: [1, 1, 1, 1, 1, 1, 1],
                 clickTracker: 0,
-                updateInterval: 1000,
-                timeMult: 1,
+                ticksPerSecond: 1,
                 resetCurrTracker: 0
             });
             if (player.currBuyables[3].owned) {
@@ -388,9 +373,6 @@ function reset(tier) {
                 }
             }
             updateAll();
-
-            //This generates a typescript error, not sure how to fix that
-            ga('send', 'event', 'reset', 'click', 'reset'); //analytics
         }
     }
 }
@@ -410,7 +392,7 @@ function updateMoney() {
     var newMoneyTable = moneyTableTemplate({
         money: displayNum(player.money, true), moneyPerSecond: displayNum(player.moneyPerSecond, true), netMoneyPerSecond: displayNum(player.netMoneyPerSecond, true),
         proofs: displayNum(player.proofs, false), proofsPerSecond: displayNum(player.proofsPerSecond, false), moneyPerClick: displayNum(player.moneyPerClick * player.clickPower, true),
-        tickLength: parseFloat((player.updateInterval * player.timeMult)).toFixed(0), timeMult: displayNum(player.timeMult, true), moneyPerAutoclick: displayNum(player.moneyPerAutoclick, true) });
+        moneyPerAutoclick: displayNum(player.moneyPerAutoclick, true), ticksPerSecond: displayNum(player.ticksPerSecond, true) });
 
     $("#info").html(newMoneyTable);
 }
@@ -505,7 +487,7 @@ function updateStats() {
     var newStats = statsTemplate({
         totalMoneyEarned: displayNum(player.totalMoneyEarned, true), totalProofs: displayNum(player.totalProofs, false),
         totalClicks: displayNum(player.totalClicks, false), totalManualClicks: displayNum(player.totalManualClicks, false),
-        totalTicks: displayNum(player.totalTicks, false), timeMult: displayNum(player.timeMult, false) });
+        totalTicks: displayNum(player.totalTicks, false) });
 
     $("#statContainer").html(newStats);
 }
@@ -645,26 +627,18 @@ function updateAll() {
 //this is a function to click the money button: allows auto button clicking
 function moneyButtonClick(amount) {
     var ifUpdate = false;
-    addMoney(player.moneyPerClick * amount);
+    addMoney(player.moneyPerClick * amount * 1000000 * 10000000);
     player.clickTracker += amount;
     player.totalClicks += amount;
-    if (player.clickTracker < 5000 * player.clicksToGain) {
-        while (player.clickTracker >= player.clicksToGain) {
-            var toAdd = Math.round(player.buildings[8].owned * player.mult[1] * globalMult[1]);
-            player.clickTracker -= player.clicksToGain;
-            addMoneyPerClick(0.1 * player.mult[0] * toAdd * globalMult[0]);
-            for (var i = 0; i < numTiers - 1; i++) {
-                player.buildings[5 * i + 3].owned += Math.round(player.buildings[5 * (i + 1) + 3].owned * player.mult[i + 1] * globalMult[i + 1]);
-            }
-        }
-        ifUpdate = true;
-    } else {
-        var toAdd = Math.round(player.buildings[8].owned * player.mult[1] * globalMult[1] * Math.floor(amount / player.clicksToGain));
-        player.clickTracker = amount % player.clicksToGain;
+
+    console.log("moneybuttonclick: " + amount.toString() + " - " + player.clickTracker.toString() + " - " + player.clicksToGain.toString());
+    if (player.clickTracker > player.clicksToGain) {
+        var toAdd = Math.round(player.buildings[8].owned * player.mult[1] * globalMult[1] * Math.floor(player.clickTracker / player.clicksToGain));
         addMoneyPerClick(0.1 * player.mult[0] * toAdd * globalMult[0]);
-        for (var i = 0; i < numTiers - 1; i++) {
-            player.buildings[5 * i + 3].owned += Math.round(player.buildings[5 * (i + 1) + 3].owned * player.mult[i + 1] * globalMult[i + 1] * Math.floor(amount / player.clicksToGain));
+        for (var i = 1; i < numTiers; i++) {
+            player.buildings[5 * (i - 1) + 3].owned += Math.round(player.buildings[5 * i + 3].owned * player.mult[i] * globalMult[i] * Math.floor(player.clickTracker / player.clicksToGain));
         }
+        player.clickTracker = player.clickTracker % player.clicksToGain;
         ifUpdate = true;
     }
 
@@ -750,7 +724,6 @@ $(document).ready(function () {
         $("#currentNumToBuy2").html("Max");
     else
         $("#currentNumToBuy2").html(player.numToBuy.toString());
-    $("#minTickLength").html(player.minTickLength.toString());
 
     $("#resetCurrTable tr td .buttonLit, #resetCurrTable tr td .button").tooltip({
         show: false, hide: false, content: function () {
@@ -768,6 +741,8 @@ $(document).ready(function () {
         moneyButtonClick(player.clickPower);
         player.totalManualClicks += player.clickPower;
     });
+
+    setInterval(update, 1000);
 });
 
 //function to buy buildings: onclick events
@@ -956,51 +931,41 @@ function buyCurrBuyable(index) {
     updateResetCurrBuyables();
 }
 
+var updateCount = 0;
+var updateCount2 = 0;
+var updateBefore = null;
+
 var update = function () {
-    // update.count makes stuff happen every 3 ticks
-    if (typeof update.count == 'undefined') {
-        update.count = 0;
-    }
-
-    // update.count2 makes stuff happen every minute
-    if (typeof update.count2 == 'undefined') {
-        update.count2 = 0;
-    }
-
-    //intervalTracker fixes window minimization issues
-    if (typeof update.intervalTracker == 'undefined') {
-        update.intervalTracker = 0;
-    }
-    if (typeof update.before == 'undefined') {
-        update.before = new Date();
+    if (updateBefore == null) {
+        updateBefore = new Date();
     }
 
     var now = new Date();
-    var elapsedTime = now.getTime() - update.before.getTime();
+    var elapsedTime = now.getTime() - updateBefore.getTime();
+    var noOfTicks = elapsedTime / 1000 * player.ticksPerSecond;
 
-    update.intervalTracker += isActive ? 0 : elapsedTime;
-
-    do {
+    //console.log("update: " + elapsedTime.toString() + " ticks: " + noOfTicks.toString());
+    if (noOfTicks > 0) {
         //adds money
-        addMoney(player.buildings[0].owned * player.deriv1Money * player.mult[0] * globalMult[0] * player.timeMult);
-        addMoney(player.buildings[2].owned * 2 * player.mult[0] * globalMult[0] * player.timeMult);
+        addMoney(player.buildings[0].owned * player.deriv1Money * player.mult[0] * globalMult[0] * noOfTicks);
+        addMoney(player.buildings[2].owned * 2 * player.mult[0] * globalMult[0] * noOfTicks);
 
         //checks if enough money to add full amount of proofs: if so, adds proofs, otherwise, adds as many proofs as possible
-        if (player.money >= player.buildings[1].owned * player.costPerProof * player.mult[0] * globalMult[0] * player.timeMult) {
-            addProofs(player.buildings[1].owned * player.mult[0] * globalMult[0] * player.timeMult);
+        if (player.money >= player.buildings[1].owned * player.costPerProof * player.mult[0] * globalMult[0] * noOfTicks) {
+            addProofs(player.buildings[1].owned * player.mult[0] * globalMult[0] * noOfTicks);
         } else
             addProofs(Math.floor(player.money / player.costPerProof));
 
         //does stuff every buildingInterval ticks
-        if (update.count >= player.buildingInterval) {
-            inventoryAdder(Math.floor(update.count / player.buildingInterval));
-            update.count = update.count % player.buildingInterval;
+        if (updateCount >= player.buildingInterval) {
+            inventoryAdder(Math.floor(updateCount / player.buildingInterval));
+            updateCount = updateCount % player.buildingInterval;
         }
 
         //does stuff every autoclickInterval ticks
-        if (update.count2 >= player.autoclickInterval) {
-            moneyButtonClick(player.upgrades[0] * Math.floor(update.count2 / player.autoclickInterval));
-            update.count2 = update.count2 % player.autoclickInterval;
+        if (updateCount2 >= player.autoclickInterval) {
+            moneyButtonClick(player.upgrades[0] * Math.floor(updateCount2 / player.autoclickInterval));
+            updateCount2 = updateCount2 % player.autoclickInterval;
         }
 
         //checks if enough proofs/mathematicians for reset currency: if so, adds reset currency
@@ -1039,89 +1004,58 @@ var update = function () {
         player.netMoneyPerSecond = player.moneyPerSecond - (player.proofsPerSecond * player.costPerProof);
         player.moneyPerAutoclick = player.upgrades[0] * player.moneyPerClick;
 
-        update.count += player.timeMult;
-        update.count2 += player.timeMult;
-        player.totalTicks += player.timeMult;
+        updateCount += noOfTicks;
+        updateCount2 += noOfTicks;
+        player.totalTicks += noOfTicks;
 
-        player.updateInterval = 1000 * Math.pow(0.98, Math.log(player.buildings[4].owned * player.mult[0] * globalMult[0] + 1));
+        //player.updateInterval = 1000 * Math.pow(0.98, Math.log(player.buildings[4].owned * player.mult[0] * globalMult[0] + 1));
+        //round log10(calc);
+        player.ticksPerSecond = Math.round(Math.log(player.buildings[4].owned * player.mult[0] * globalMult[0] + 1) / Math.log(10)) + 1;
 
-        //this fixes minimization by running until the interval tracker is less than 0 if the thing isn't active
-        if (!isActive)
-            update.intervalTracker -= player.updateInterval * player.timeMult;
-    } while(!isActive && update.intervalTracker > 0 && elapsedTime > player.updateInterval);
+        //checks active tab, updates appropriate things
+        var activeTab = $("#tabs").tabs("option", "active");
+        switch (activeTab) {
+            case 0:
+                updateInventory();
+                break;
 
-    //checks active tab, updates appropriate things
-    var activeTab = $("#tabs").tabs("option", "active");
-    switch (activeTab) {
-        case 0:
-            updateInventory();
-            break;
+            case 1:
+                updateUpgrades();
+                break;
 
-        case 1:
-            updateUpgrades();
-            break;
+            case 2:
+                updatePrestige();
+                break;
 
-        case 2:
-            updatePrestige();
-            break;
-
-        case 4:
-            updateStats();
-            break;
+            case 4:
+                updateStats();
+                break;
+        }
+        updateMoney();
     }
-    updateMoney();
 
-    update.before = new Date();
-
-    while (player.updateInterval * player.timeMult < player.minTickLength)
-        player.timeMult *= 1000 / player.minTickLength; //sets up time multiplier if game's ticking too fast
-
-    setTimeout(update, player.updateInterval * player.timeMult);
+    updateBefore = new Date();
 };
 
 //stuff that happens each tick
-setTimeout(update, player.updateInterval * player.timeMult);
-
 setInterval(save, 60000);
 
 //stuff that happens every ten ticks (i.e. inventory additions)
 function inventoryAdder(amount) {
-    if (amount < 250) {
-        while (amount > 0) {
-            player.mathematiciansToNextCurr -= Math.round(player.buildings[9].owned * player.mult[1] * globalMult[1]);
+    player.mathematiciansToNextCurr -= Math.round(player.buildings[9].owned * player.mult[1] * globalMult[1] * amount);
 
-            for (var i = 0; i < player.buildings.length - 5; i++) {
-                switch (i % 5) {
-                    case 0:
-                    case 1:
-                    case 4:
-                        player.buildings[i].owned += Math.round(player.buildings[i + 5].owned * player.mult[Math.floor(i / 5) + 1] * globalMult[Math.floor(i / 5) + 1]);
-                        break;
-                    case 2:
-                        player.buildings[i].owned += Math.round(3 * player.buildings[i + 5].owned * player.mult[Math.floor(i / 5) + 1] * globalMult[Math.floor(i / 5) + 1]);
-                        break;
-                    default:
-                        break;
-                }
-            }
-            amount--;
-        }
-    } else {
-        player.mathematiciansToNextCurr -= Math.round(player.buildings[9].owned * player.mult[1] * globalMult[1] * amount);
-
-        for (var i = 0; i < player.buildings.length - 5; i++) {
-            switch (i % 5) {
-                case 0:
-                case 1:
-                case 4:
-                    player.buildings[i].owned += Math.round(player.buildings[i + 5].owned * player.mult[Math.floor(i / 5) + 1] * globalMult[Math.floor(i / 5) + 1]) * amount;
-                    break;
-                case 2:
-                    player.buildings[i].owned += Math.round(3 * player.buildings[i + 5].owned * player.mult[Math.floor(i / 5) + 1] * globalMult[Math.floor(i / 5) + 1]) * amount;
-                    break;
-                default:
-                    break;
-            }
+    for (var i = 0; i < player.buildings.length - 5; i++) {
+        switch (i % 5) {
+            case 0:
+            case 1:
+            case 4:
+                player.buildings[i].owned += Math.round(player.buildings[i + 5].owned * player.mult[Math.floor(i / 5) + 1] * globalMult[Math.floor(i / 5) + 1]) * amount;
+                break;
+            case 2:
+                player.buildings[i].owned += Math.round(3 * player.buildings[i + 5].owned * player.mult[Math.floor(i / 5) + 1] * globalMult[Math.floor(i / 5) + 1]) * amount;
+                break;
+            default:
+                break;
         }
     }
 }
